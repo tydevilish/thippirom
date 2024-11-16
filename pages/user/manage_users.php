@@ -71,7 +71,7 @@ checkPageAccess(PAGE_MANAGE_USERS);
             ?>
 
             <div class="lg:flex justify-between items-center mb-4">
-                <div class=" items-center">
+                <div class="items-center">
                     <div class="mb-2">
                         <h2 class="text-xl font-semibold text-gray-800">รายชื่อผู้ใช้ทั้งหมด</h2>
                         <p class="text-sm text-gray-500 mt-1">จำนวนผู้ใช้: <?php echo $total_users; ?> คน</p>
@@ -91,13 +91,22 @@ checkPageAccess(PAGE_MANAGE_USERS);
                         </div>
                     </div>
                 </div>
-                <button onclick="openAddUserModal()"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    เพิ่มผู้ใช้
-                </button>
+                <div class="flex space-x-2">
+                    <button onclick="openTagManagementModal()" 
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        จัดการแท็ก
+                    </button>
+                    <button onclick="openAddUserModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        เพิ่มผู้ใช้
+                    </button>
+                </div>
             </div>
 
             <!-- ตารางแสดงข้อมูล -->
@@ -115,7 +124,8 @@ checkPageAccess(PAGE_MANAGE_USERS);
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                     รหัสผ่าน</th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    สถานะ</th>
+                                    แท็ก
+                                </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                     สิทธิ์การใช้งาน</th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -134,10 +144,20 @@ checkPageAccess(PAGE_MANAGE_USERS);
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                                         <?php echo htmlspecialchars($user['password']); ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span
-                                            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                            ปกติ
-                                        </span>
+                                        <?php
+                                        $tag_stmt = $conn->prepare("SELECT t.name, t.color 
+                               FROM user_tags t 
+                               JOIN user_tag_relations r ON t.tag_id = r.tag_id 
+                               WHERE r.user_id = ?");
+                                        $tag_stmt->execute([$user['user_id']]);
+                                        $tags = $tag_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                                        foreach ($tags as $tag):
+                                        ?>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-<?= $tag['color'] ?>-200 text-<?= $tag['color'] ?>-800 mr-1">
+                                                <?= htmlspecialchars($tag['name']) ?>
+                                            </span>
+                                        <?php endforeach; ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span
@@ -174,6 +194,7 @@ checkPageAccess(PAGE_MANAGE_USERS);
             </div>
         </div>
     </div>
+
 
     <!-- Modal สำหรับเพิ่ม/แก้ไขผู้ใช้ -->
     <div id="userModal" class="hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -258,6 +279,37 @@ checkPageAccess(PAGE_MANAGE_USERS);
                                             class="pl-10 w-full rounded-lg border-2 border-gray-200 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 transition-all duration-200 bg-gray-50 hover:bg-white">
                                     </div>
                                 </div>
+
+                                <div class="relative">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">แท็ก</label>
+                                    <div class="relative">
+                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                            </svg>
+                                        </span>
+                                        <div class="pl-10 w-full rounded-lg border-2 border-gray-200 shadow-sm focus-within:border-blue-500 focus-within:ring focus-within:ring-blue-200 transition-all duration-200 bg-gray-50 hover:bg-white p-2">
+                                            <div class="flex flex-wrap gap-2">
+                                                <?php
+                                                $all_tags_stmt = $conn->query("SELECT * FROM user_tags ORDER BY name");
+                                                $all_tags = $all_tags_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                                                foreach ($all_tags as $tag):
+                                                    $color = $tag['color'] ?? 'gray';
+                                                ?>
+                                                    <label class="inline-flex items-center px-3 py-1.5 rounded-full border border-<?= $color ?>-200 hover:bg-<?= $color ?>-200 transition-colors cursor-pointer group">
+                                                        <input type="checkbox" name="tags[]" value="<?= $tag['tag_id'] ?>"
+                                                            class="form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 focus:ring-offset-0">
+                                                        <span class="ml-2 text-sm text-<?= $color ?>-700 group-hover:text-<?= $color ?>-800">
+                                                            <?= htmlspecialchars($tag['name']) ?>
+                                                        </span>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- ข้อมูลที่อยู่และสิทธิ์ -->
@@ -333,6 +385,55 @@ checkPageAccess(PAGE_MANAGE_USERS);
         </div>
     </div>
 
+    <!-- เพิ่ม Modal สำหรับจัดการแท็ก -->
+    <div id="tagModal" class="hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="relative w-full max-w-2xl bg-white rounded-lg shadow-2xl">
+                <div class="bg-gradient-to-r from-purple-600 to-purple-700 rounded-t-lg">
+                    <div class="flex justify-between items-center p-6">
+                        <h3 class="text-2xl font-semibold text-white">จัดการแท็ก</h3>
+                        <button onclick="closeTagModal()" class="text-white hover:text-gray-200 transition-colors">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-6">
+                    <!-- ฟอร์มเพิ่มแท็กใหม่ -->
+                    <form id="tagForm" class="mb-6">
+                        <div class="flex space-x-4">
+                            <div class="flex-1">
+                                <input type="text" id="newTagName" placeholder="ชื่อแท็ก" 
+                                    class="w-full rounded-lg border-2 border-gray-200 p-2">
+                            </div>
+                            <div class="w-40">
+                                <select id="newTagColor" class="w-full rounded-lg border-2 border-gray-200 p-2">
+                                    <option value="blue">น้ำเงิน</option>
+                                    <option value="green">เขียว</option>
+                                    <option value="red">แดง</option>
+                                    <option value="yellow">เหลือง</option>
+                                    <option value="purple">ม่วง</option>
+                                    <option value="pink">ชมพู</option>
+                                    <option value="gray">เทา</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                                เพิ่มแท็ก
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- รายการแท็กทั้งหมด -->
+                    <div id="tagList" class="space-y-2">
+                        <!-- แท็กจะถูกเพิ่มที่นี่ด้วย JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function openAddUserModal() {
             document.getElementById('modalTitle').textContent = 'เพิ่มผู้ใช้ใหม่';
@@ -362,6 +463,20 @@ checkPageAccess(PAGE_MANAGE_USERS);
                     form.role_id.value = data.role_id || '';
                     form.non_contact_address.value = data.non_contact_address || '';
                     form.contact_address.value = data.contact_address || '';
+                    // เคลียร์ checkbox ทั้งหมดก่อน
+                    document.querySelectorAll('input[name="tags[]"]').forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+
+                    if (data.tags && Array.isArray(data.tags)) {
+                        data.tags.forEach(tagId => {
+                            const checkbox = document.querySelector(`input[name="tags[]"][value="${tagId}"]`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    }
+
                     document.getElementById('userModal').classList.remove('hidden');
                 })
                 .catch(error => {
@@ -382,9 +497,9 @@ checkPageAccess(PAGE_MANAGE_USERS);
                 formData.append('user_id', userId);
 
                 fetch('../../actions/user/process_user.php', {
-                    method: 'POST',
-                    body: formData
-                })
+                        method: 'POST',
+                        body: formData
+                    })
                     .then(response => response.json())
                     .then(data => {
                         if (data.status === 'success') {
@@ -398,15 +513,15 @@ checkPageAccess(PAGE_MANAGE_USERS);
         }
 
         // เพิ่ม event listener สำหรับฟอร์ม
-        document.getElementById('userForm').addEventListener('submit', function (e) {
+        document.getElementById('userForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
             const formData = new FormData(this);
 
             fetch('../../actions/user/process_user.php', {
-                method: 'POST',
-                body: formData
-            })
+                    method: 'POST',
+                    body: formData
+                })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -443,11 +558,11 @@ checkPageAccess(PAGE_MANAGE_USERS);
             }
         });
 
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('searchInput');
             const tableRows = document.querySelectorAll('tbody tr');
 
-            searchInput.addEventListener('input', function () {
+            searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase();
 
                 tableRows.forEach(row => {
@@ -456,6 +571,94 @@ checkPageAccess(PAGE_MANAGE_USERS);
                 });
             });
         });
+
+        function openTagManagementModal() {
+            document.getElementById('tagModal').classList.remove('hidden');
+            loadTags();
+        }
+
+        function closeTagModal() {
+            document.getElementById('tagModal').classList.add('hidden');
+        }
+
+        function loadTags() {
+            fetch('../../actions/user/get_tags.php')
+                .then(response => response.json())
+                .then(tags => {
+                    const tagList = document.getElementById('tagList');
+                    tagList.innerHTML = '';
+                    
+                    tags.forEach(tag => {
+                        const tagElement = document.createElement('div');
+                        tagElement.className = 'flex items-center justify-between p-2 bg-gray-50 rounded-lg';
+                        tagElement.innerHTML = `
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-block w-4 h-4 rounded-full bg-${tag.color}-500"></span>
+                                <span>${tag.name}</span>
+                            </div>
+                            <button onclick="deleteTag(${tag.tag_id})" class="text-red-600 hover:text-red-800">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        `;
+                        tagList.appendChild(tagElement);
+                    });
+                });
+        }
+
+        document.getElementById('tagForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('newTagName').value;
+            const color = document.getElementById('newTagColor').value;
+
+            fetch('../../actions/user/process_tag.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'add',
+                    name: name,
+                    color: color
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('newTagName').value = '';
+                    loadTags();
+                    window.location.reload();
+                } else {
+                    alert(data.message);
+                }
+            });
+        });
+
+        function deleteTag(tagId) {
+            if (confirm('คุณต้องการลบแท็กนี้ใช่หรือไม่?')) {
+                fetch('../../actions/user/process_tag.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        tag_id: tagId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        loadTags();
+                        window.location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+            }
+        }
     </script>
 </body>
 

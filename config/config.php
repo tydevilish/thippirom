@@ -1,8 +1,8 @@
 <?php
 $host = 'localhost';  
-$dbname = 'thippiro_village';  
-$username = 'thippiro_diya';  
-$password = '6gVcAPBKf4iG';  
+$dbname = 'thippirom';  
+$username = 'root';  
+$password = '';  
 
 try {
 

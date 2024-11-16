@@ -4,11 +4,18 @@ require_once '../../config/config.php';
 require_once '../../includes/auth.php';
 include '../../components/menu/Menu.php';
 
-// ตรวจสอบสิทธิ์การเข้าถึงหน้า
 checkPageAccess(PAGE_MANAGE_VISITORS);
 
-// ดึงข้อมูลผู้ใช้ทั้งหมด
-$stmt = $conn->query("SELECT user_id, fullname, username FROM users WHERE role_id != 9 ORDER BY username");
+$stmt = $conn->query("
+    SELECT u.user_id, u.fullname, u.username, 
+           GROUP_CONCAT(CONCAT(t.name, ':', t.color) SEPARATOR '|') as tags
+    FROM users u 
+    LEFT JOIN user_tag_relations utr ON u.user_id = utr.user_id
+    LEFT JOIN user_tags t ON utr.tag_id = t.tag_id
+    WHERE u.role_id != 9 
+    GROUP BY u.user_id
+    ORDER BY u.username
+");
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ดึงข้อมูลเหตุผลการเข้าพบ
@@ -570,9 +577,11 @@ $date_condition = getDateCondition($search_period);
                                     <select id="user_id" name="user_id" class="block w-full pl-10 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg shadow-sm bg-white hover:bg-gray-50 transition-colors duration-200">
                                         <option value="">เลือกผู้มาพบ</option>
                                         <?php foreach ($users as $user): ?>
-                                            <option value="<?= $user['user_id'] ?>">
+                                            <option value="<?= $user['user_id'] ?>" 
+                                                    data-tags="<?= htmlspecialchars($user['tags']) ?>">
                                                 <?php if ($_SESSION['role_id'] == 1 || $_SESSION['role_id'] == 7) { ?>
-                                                    <?= htmlspecialchars($user['fullname']) ?>     <?php } ?>
+                                                    <?= htmlspecialchars($user['fullname']) ?>
+                                                <?php } ?> 
                                                 (<?= htmlspecialchars($user['username']) ?>)
                                             </option>
                                         <?php endforeach; ?>
@@ -866,12 +875,32 @@ $date_condition = getDateCondition($search_period);
                 },
                 render: {
                     option: function (data, escape) {
+                        const tags = data.tags ? data.tags.split('|').map(tag => {
+                            const [name, color] = tag.split(':');
+                            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-${color}-200 text-${color}-800 ml-1">
+                                ${escape(name)}
+                            </span>`;
+                        }).join('') : '';
+                        
                         return `<div class="py-2 px-3">
-                            <div class="font-medium">${escape(data.text)}</div>
+                            <div class="font-medium">
+                                ${escape(data.text)}
+                                ${tags}
+                            </div>
                         </div>`;
                     },
                     item: function (data, escape) {
-                        return `<div>${escape(data.text)}</div>`;
+                        const tags = data.tags ? data.tags.split('|').map(tag => {
+                            const [name, color] = tag.split(':');
+                            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-${color}-200 text-${color}-800 ml-1">
+                                ${escape(name)}
+                            </span>`;
+                        }).join('') : '';
+                        
+                        return `<div>
+                            ${escape(data.text)}
+                            ${tags}
+                        </div>`;
                     }
                 }
             });

@@ -8,9 +8,17 @@ checkPageAccess(PAGE_MANAGE_USERS);
 
 if (isset($_GET['id'])) {
     try {
-        $stmt = $conn->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt = $conn->prepare("SELECT u.*, GROUP_CONCAT(utr.tag_id) as tags 
+                               FROM users u 
+                               LEFT JOIN user_tag_relations utr ON u.user_id = utr.user_id 
+                               WHERE u.user_id = ?
+                               GROUP BY u.user_id");
         $stmt->execute([$_GET['id']]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user) {
+            $user['tags'] = $user['tags'] ? explode(',', $user['tags']) : [];
+        }
         
         header('Content-Type: application/json');
         echo json_encode($user);

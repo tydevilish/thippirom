@@ -11,27 +11,31 @@ if (isset($_GET['payment_id'])) {
 
     // ดึงข้อมูลการชำระเงินทั้งหมด
     $stmt = $conn->prepare("
-SELECT 
-    p.amount as payment_amount,
-    p.description,
-    p.month,
-    p.year,
-    t.transaction_id,
-    t.status,
-    t.created_at,
-    t.slip_image,
-    t.reject_reason,
-    u.username,
-    u.user_id,
-    u.fullname,
-    u.phone,
-    pu.penalty
-FROM payments p
-LEFT JOIN payment_users pu ON p.payment_id = pu.payment_id
-LEFT JOIN users u ON pu.user_id = u.user_id
-LEFT JOIN transactions t ON (p.payment_id = t.payment_id AND u.user_id = t.user_id)
-WHERE p.payment_id = ?
-ORDER BY u.username ASC
+    SELECT 
+        p.amount as payment_amount,
+        p.description,
+        p.month,
+        p.year,
+        t.transaction_id,
+        t.status,
+        t.created_at,
+        t.slip_image,
+        t.reject_reason,
+        u.username,
+        u.user_id,
+        u.fullname,
+        u.phone,
+        pu.penalty,
+        GROUP_CONCAT(CONCAT(ut.name, ':', ut.color) SEPARATOR '|') as tags
+    FROM payments p
+    LEFT JOIN payment_users pu ON p.payment_id = pu.payment_id
+    LEFT JOIN users u ON pu.user_id = u.user_id
+    LEFT JOIN transactions t ON (p.payment_id = t.payment_id AND u.user_id = t.user_id)
+    LEFT JOIN user_tag_relations utr ON u.user_id = utr.user_id
+    LEFT JOIN user_tags ut ON utr.tag_id = ut.tag_id
+    WHERE p.payment_id = ?
+    GROUP BY p.payment_id, u.user_id
+    ORDER BY u.username ASC
     ");
     $stmt->execute([$payment_id]);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -69,7 +73,8 @@ ORDER BY u.username ASC
             'reject_reason' => $row['reject_reason'],
             'fullname' => $row['fullname'],
             'phone' => $row['phone'],
-            'penalty' => $row['penalty']
+            'penalty' => $row['penalty'],
+            'tags' => $row['tags']
         ];
 
         if (!$row['status']) {
@@ -82,6 +87,7 @@ ORDER BY u.username ASC
         }
     }
 ?>
+
 
     <style>
         .tab-content {
@@ -103,6 +109,16 @@ ORDER BY u.username ASC
 
         .tab-btn .absolute {
             transition: transform 200ms ease-in-out;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.125rem 0.625rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: 0.25rem;
         }
     </style>
 
@@ -213,6 +229,16 @@ ORDER BY u.username ASC
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 <?php echo htmlspecialchars($user['fullname'] ?: '-'); ?>
+                                                <?php if (!empty($user['tags'])): ?>
+                                                    <?php foreach (explode('|', $user['tags']) as $tag): ?>
+                                                        <?php
+                                                        list($tagName, $tagColor) = explode(':', $tag);
+                                                        ?>
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-<?= $tagColor ?>-200 text-<?= $tagColor ?>-800 ml-1">
+                                                            <?= htmlspecialchars($tagName) ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 <?php echo htmlspecialchars($user['phone'] ?: '-'); ?>

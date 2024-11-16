@@ -10,7 +10,7 @@ $response = ['status' => 'error', 'message' => 'Invalid request'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
+
     switch ($action) {
         case 'add':
             try {
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         VALUES (:username, :password, :fullname, :street, :phone, :role_id, 
                         :non_contact_address, :contact_address)";
                 $stmt = $conn->prepare($sql);
-                
+
                 $stmt->execute([
                     ':username' => $_POST['username'],
                     ':password' => $_POST['password'],
@@ -30,7 +30,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':non_contact_address' => $_POST['non_contact_address'] ?? null,
                     ':contact_address' => $_POST['contact_address'] ?? null
                 ]);
-                
+
+                // จัดการ tags
+                if (!empty($_POST['tags'])) {
+                    $tag_stmt = $conn->prepare("INSERT INTO user_tag_relations (user_id, tag_id) VALUES (?, ?)");
+                    foreach ($_POST['tags'] as $tag_id) {
+                        $tag_stmt->execute([$user_id, $tag_id]);
+                    }
+                }
+
                 $response = ['status' => 'success', 'message' => 'เพิ่มผู้ใช้สำเร็จ'];
             } catch (PDOException $e) {
                 $response = ['status' => 'error', 'message' => $e->getMessage()];
@@ -47,15 +55,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         role_id = :role_id,
                         non_contact_address = :non_contact_address,
                         contact_address = :contact_address";
-                
+
                 if (!empty($_POST['password'])) {
                     $sql .= ", password = :password";
                 }
-                
+
                 $sql .= " WHERE user_id = :user_id";
-                
+
                 $stmt = $conn->prepare($sql);
-                
+
                 $params = [
                     ':username' => $_POST['username'],
                     ':fullname' => $_POST['fullname'] ?? null,
@@ -66,13 +74,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':contact_address' => $_POST['contact_address'] ?? null,
                     ':user_id' => $_POST['user_id']
                 ];
-                
+
                 if (!empty($_POST['password'])) {
                     $params[':password'] = $_POST['password'];
                 }
-                
+
                 $stmt->execute($params);
-                
+
+                // อัพเดท tags
+                $delete_tags = $conn->prepare("DELETE FROM user_tag_relations WHERE user_id = ?");
+                $delete_tags->execute([$_POST['user_id']]);
+
+                if (!empty($_POST['tags'])) {
+                    $tag_stmt = $conn->prepare("INSERT INTO user_tag_relations (user_id, tag_id) VALUES (?, ?)");
+                    foreach ($_POST['tags'] as $tag_id) {
+                        $tag_stmt->execute([$_POST['user_id'], $tag_id]);
+                    }
+                }
+
                 $response = ['status' => 'success', 'message' => 'อัพเดทข้อมูลสำเร็จ'];
             } catch (PDOException $e) {
                 $response = ['status' => 'error', 'message' => $e->getMessage()];
@@ -108,9 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // ยืนยันการทำรายการทั้งหมด
                 $conn->commit();
-                
-                $response = ['status' => 'success', 'message' => 'ลบผู้ใช้และข้อมูลที่เกี่ยวข้องสำเร็จ'];
 
+                $response = ['status' => 'success', 'message' => 'ลบผู้ใช้และข้อมูลที่เกี่ยวข้องสำเร็จ'];
             } catch (PDOException $e) {
                 // ถ้าเกิดข้อผิดพลาด ให้ย้อนกลับทุกรายการ
                 $conn->rollBack();
@@ -121,4 +139,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 header('Content-Type: application/json');
-echo json_encode($response); 
+echo json_encode($response);
