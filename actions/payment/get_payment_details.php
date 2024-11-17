@@ -87,7 +87,22 @@ if (isset($_GET['payment_id'])) {
             }
         }
     }
+
+    $stmt = $conn->prepare("
+    SELECT DISTINCT u.*, t.status, t.transaction_id,
+           (SELECT COALESCE(SUM(amount), 0) FROM payment_installments WHERE transaction_id = t.transaction_id) as paid_amount,
+           (p.amount + COALESCE(pu.penalty, 0)) as total_amount
+    FROM users u
+    INNER JOIN payment_users pu ON u.user_id = pu.user_id
+    INNER JOIN transactions t ON u.user_id = t.user_id
+    INNER JOIN payments p ON pu.payment_id = p.payment_id
+    WHERE p.payment_id = ? AND t.status = 'partial'
+    ORDER BY u.user_id
+");
+    $stmt->execute([$payment_id]);
+    $users['partial'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
 
 
     <style>
@@ -162,6 +177,12 @@ if (isset($_GET['payment_id'])) {
                     data-tab="pending">
                     รอตรวจสอบ (<?php echo count($users['pending']); ?>)
                 </button>
+                <button onclick="showPaymentTab('partial')"
+                    class="tab-btn px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-blue-600 transition-colors"
+                    data-tab="partial">
+                    แบ่งชำระ (<?php echo count($users['partial'] ?? []); ?>)
+                </button>
+
 
                 <button onclick="showPaymentTab('approved')"
                     class="tab-btn px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-blue-600 transition-colors"
@@ -183,146 +204,183 @@ if (isset($_GET['payment_id'])) {
                 <div id="tab-<?php echo $status; ?>"
                     class="tab-content <?php echo $status === 'not_paid' ? '' : 'hidden opacity-0'; ?>">
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        รหัสผู้ใช้
-                                    </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ชื่อ-นามสกุล
-                                    </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        เบอร์โทร
-                                    </th>
-                                    <?php if ($status !== 'not_paid'): ?>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            วันที่
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            หลักฐาน
-                                        </th>
-                                    <?php endif; ?>
-                                    <?php if ($status === 'rejected'): ?>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            เหตุผล
-                                        </th>
-                                    <?php endif; ?>
-                                    <?php if ($status === 'pending'): ?>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            การกระทำ
-                                        </th>
-                                    <?php endif; ?>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        จำนวนเบี้ยปรับ
-                                    </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        เบี้ยปรับ
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                <?php if (!empty($user_list)): ?>
-                                    <?php foreach ($user_list as $user): ?>
-                                        <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <?php echo htmlspecialchars($user['user_id']); ?>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <?php echo htmlspecialchars($user['fullname'] ?: '-'); ?>
-                                                <?php if (!empty($user['tags'])): ?>
-                                                    <?php foreach (explode('|', $user['tags']) as $tag): ?>
-                                                        <?php
-                                                        list($tagName, $tagColor) = explode(':', $tag);
-                                                        ?>
-                                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-<?= $tagColor ?>-200 text-<?= $tagColor ?>-800 ml-1">
-                                                            <?= htmlspecialchars($tagName) ?>
-                                                        </span>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <?php echo htmlspecialchars($user['phone'] ?: '-'); ?>
-                                            </td>
-                                            <?php if ($status !== 'not_paid'): ?>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <?php echo date('d/m/Y H:i', strtotime($user['created_at'])); ?>
+                        <?php if ($status === 'partial'): ?>
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัสผู้ใช้</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">บ้านเลขที่</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ยอดรวม</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชำระแล้ว</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">คงเหลือ</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เบี้ยปรับ</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <?php if (!empty($user_list)): ?>
+                                        <?php foreach ($user_list as $index => $user): ?>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?php echo htmlspecialchars($user['user_id']); ?>
                                                 </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <?php if (!empty($user['slip_image'])): ?>
-                                                        <a href="../../uploads/slips/<?php echo htmlspecialchars($user['slip_image']); ?>"
-                                                            target="_blank"
-                                                            class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors">
-                                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                            </svg>
-                                                            ดูหลักฐาน
-                                                        </a>
-                                                    <?php else: ?>
-                                                        <div class="flex items-center">
-                                                            <input type="file"
-                                                                id="slip_<?php echo $user['transaction_id']; ?>"
-                                                                accept="image/*"
-                                                                onchange="uploadSlip(<?php echo $user['transaction_id']; ?>, this)"
-                                                                class="hidden">
-                                                            <label for="slip_<?php echo $user['transaction_id']; ?>"
-                                                                class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer">
-                                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                                                </svg>
-                                                                อัพโหลดหลักฐาน
-                                                            </label>
-                                                        </div>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $user['fullname'] ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php echo $user['phone']; ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo number_format($user['total_amount'], 2); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600"><?php echo number_format($user['paid_amount'], 2); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-orange-600"><?php echo number_format($user['total_amount'] - $user['paid_amount'], 2); ?></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600"><?php echo number_format($user['penalty'] ?? 0, 2); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr>
+                                            <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">ไม่พบข้อมูล</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        <?php else: ?>
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            รหัสผู้ใช้
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            ชื่อ-นามสกุล
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            เบอร์โทร
+                                        </th>
+                                        <?php if ($status !== 'not_paid'): ?>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                วันที่
+                                            </th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                หลักฐาน
+                                            </th>
+                                        <?php endif; ?>
+                                        <?php if ($status === 'rejected'): ?>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                เหตุผล
+                                            </th>
+                                        <?php endif; ?>
+                                        <?php if ($status === 'pending'): ?>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                การกระทำ
+                                            </th>
+                                        <?php endif; ?>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            จำนวนเบี้ยปรับ
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            เบี้ยปรับ
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <?php if (!empty($user_list)): ?>
+                                        <?php foreach ($user_list as $user): ?>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?php echo htmlspecialchars($user['user_id']); ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?php echo htmlspecialchars($user['fullname'] ?: '-'); ?>
+                                                    <?php if (!empty($user['tags'])): ?>
+                                                        <?php foreach (explode('|', $user['tags']) as $tag): ?>
+                                                            <?php
+                                                            list($tagName, $tagColor) = explode(':', $tag);
+                                                            ?>
+                                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-<?= $tagColor ?>-200 text-<?= $tagColor ?>-800 ml-1">
+                                                                <?= htmlspecialchars($tagName) ?>
+                                                            </span>
+                                                        <?php endforeach; ?>
                                                     <?php endif; ?>
                                                 </td>
-                                            <?php endif; ?>
-                                            <?php if ($status === 'rejected'): ?>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?php echo htmlspecialchars($user['phone'] ?: '-'); ?>
+                                                </td>
+                                                <?php if ($status !== 'not_paid'): ?>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <?php echo date('d/m/Y H:i', strtotime($user['created_at'])); ?>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <?php if (!empty($user['slip_image'])): ?>
+                                                            <a href="../../uploads/slips/<?php echo htmlspecialchars($user['slip_image']); ?>"
+                                                                target="_blank"
+                                                                class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors">
+                                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                </svg>
+                                                                ดูหลักฐาน
+                                                            </a>
+                                                        <?php else: ?>
+                                                            <div class="flex items-center">
+                                                                <input type="file"
+                                                                    id="slip_<?php echo $user['transaction_id']; ?>"
+                                                                    accept="image/*"
+                                                                    onchange="uploadSlip(<?php echo $user['transaction_id']; ?>, this)"
+                                                                    class="hidden">
+                                                                <label for="slip_<?php echo $user['transaction_id']; ?>"
+                                                                    class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer">
+                                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                                    </svg>
+                                                                    อัพโหลดหลักฐาน
+                                                                </label>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                <?php endif; ?>
+                                                <?php if ($status === 'rejected'): ?>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        <?php echo htmlspecialchars($user['reject_reason']); ?>
+                                                    </td>
+                                                <?php endif; ?>
+                                                <?php if ($status === 'pending'): ?>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                                        <button
+                                                            onclick="updateTransactionStatus(<?php echo $user['transaction_id']; ?>, 'approved')"
+                                                            class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors">
+                                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                            อนุมัติ
+                                                        </button>
+                                                        <button
+                                                            onclick="updateTransactionStatus(<?php echo $user['transaction_id']; ?>, 'rejected')"
+                                                            class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors">
+                                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                            ไม่อนุมัติ
+                                                        </button>
+                                                    </td>
+                                                <?php endif; ?>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                                                    <?php echo $user['penalty'] ?? 0; ?>
+                                                </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <?php echo htmlspecialchars($user['reject_reason']); ?>
-                                                </td>
-                                            <?php endif; ?>
-                                            <?php if ($status === 'pending'): ?>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                                                    <button
-                                                        onclick="updateTransactionStatus(<?php echo $user['transaction_id']; ?>, 'approved')"
-                                                        class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors">
-                                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                        อนุมัติ
-                                                    </button>
-                                                    <button
-                                                        onclick="updateTransactionStatus(<?php echo $user['transaction_id']; ?>, 'rejected')"
-                                                        class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors">
-                                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                        ไม่อนุมัติ
+                                                    <button onclick="setPenalty(<?php echo $user['user_id']; ?>, <?php echo $payment_id; ?>, <?php echo $user['penalty'] ?? 0; ?>)"
+                                                        class="text-red-600 hover:text-red-700 text-sm">
+                                                        <i class="fas fa-exclamation-circle mr-1"></i>ตั้งเบี้ยปรับ
                                                     </button>
                                                 </td>
-                                            <?php endif; ?>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                                                <?php echo $user['penalty'] ?? 0; ?>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <button onclick="setPenalty(<?php echo $user['user_id']; ?>, <?php echo $payment_id; ?>, <?php echo $user['penalty'] ?? 0; ?>)"
-                                                    class="text-red-600 hover:text-red-700 text-sm">
-                                                    <i class="fas fa-exclamation-circle mr-1"></i>ตั้งเบี้ยปรับ
-                                                </button>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr>
+                                            <td colspan="<?php echo ($status !== 'not_paid' ? '7' : '4'); ?>"
+                                                class="px-6 py-4 text-center text-sm text-gray-500">
+                                                ไม่พบข้อมูล
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <tr>
-                                        <td colspan="<?php echo ($status !== 'not_paid' ? '7' : '4'); ?>"
-                                            class="px-6 py-4 text-center text-sm text-gray-500">
-                                            ไม่พบข้อมูล
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>

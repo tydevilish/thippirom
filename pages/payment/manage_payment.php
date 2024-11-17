@@ -594,7 +594,7 @@ $pending_users = $result['pending_users'];
                     alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
                 });
         }
-        
+
         const sidebar = document.getElementById('sidebar');
         const toggleBtn = document.getElementById('toggleSidebar');
         const toggleIcon = toggleBtn.querySelector('svg path');
@@ -669,31 +669,80 @@ $pending_users = $result['pending_users'];
         }
 
         function updateTransactionStatus(transactionId, status) {
-            let reason = '';
-            if (status === 'rejected') {
-                reason = prompt('กรุณารบุเหตุผลที่ไม่อนุมัติ:');
+            if (status === 'approved') {
+                // Show payment type modal
+                const modal = `
+            <div id="paymentTypeModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="bg-white rounded-lg p-6 w-96">
+                    <h3 class="text-lg font-semibold mb-4">เลือกประเภทการชำระ</h3>
+                    <div class="space-y-4">
+                        <button onclick="processPayment(${transactionId}, 'full')" 
+                                class="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            ชำระเต็มจำนวน
+                        </button>
+                        <button onclick="showInstallmentForm(${transactionId})" 
+                                class="w-full py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">
+                            แบ่งชำระ
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+                document.body.insertAdjacentHTML('beforeend', modal);
+            } else {
+                // Handle rejection as before
+                let reason = prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ:');
                 if (!reason) return;
+
+                updatePaymentStatus(transactionId, status, reason);
             }
+        }
+
+        function showInstallmentForm(transactionId) {
+            document.getElementById('paymentTypeModal').remove();
+            const modal = `
+        <div id="installmentModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg p-6 w-96">
+                <h3 class="text-lg font-semibold mb-4">ระบุจำนวนเงินที่ชำระ</h3>
+                <input type="number" id="installmentAmount" class="w-full p-2 border rounded mb-4" 
+                       placeholder="จำนวนเงิน" step="0.01">
+                <div class="flex justify-end space-x-2">
+                    <button onclick="document.getElementById('installmentModal').remove()" 
+                            class="px-4 py-2 bg-gray-200 rounded">
+                        ยกเลิก
+                    </button>
+                    <button onclick="processPayment(${transactionId}, 'partial')" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded">
+                        บันทึก
+                    </button>
+                </div>
+            </div>
+        </div>`;
+            document.body.insertAdjacentHTML('beforeend', modal);
+        }
+
+        function processPayment(transactionId, type) {
+            const amount = type === 'partial' ? document.getElementById('installmentAmount').value : null;
 
             fetch('../../actions/payment/update_transaction_status.php', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: `transaction_id=${transactionId}&status=${status}&reason=${encodeURIComponent(reason)}`
+                    body: `transaction_id=${transactionId}&status=${type === 'full' ? 'approved' : 'partial'}&amount=${amount}`
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // ีโหลดข้อมูลใน modal
+                        if (document.getElementById('paymentTypeModal')) {
+                            document.getElementById('paymentTypeModal').remove();
+                        }
+                        if (document.getElementById('installmentModal')) {
+                            document.getElementById('installmentModal').remove();
+                        }
                         viewPaymentDetails(data.payment_id);
                     } else {
                         alert('เกิดข้อผิดพลาด: ' + data.message);
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('เกิดข้อผิดพลาดในกรอัพเดทสถานะ');
                 });
         }
 

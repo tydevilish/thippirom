@@ -126,7 +126,8 @@ $total_pending_amount = $result['total_amount'];
                             $stmt = $conn->prepare("
                                 SELECT p.*, t.status as payment_status, t.transaction_id, t.reject_reason, t.slip_image, t.created_at as payment_date,
                                        (p.amount + COALESCE(pu.penalty, 0)) as total_amount,
-                                       pu.penalty
+                                       pu.penalty,
+                                       (SELECT COALESCE(SUM(amount), 0) FROM payment_installments WHERE transaction_id = t.transaction_id) as paid_amount
                                 FROM payments p 
                                 INNER JOIN payment_users pu ON p.payment_id = pu.payment_id 
                                 LEFT JOIN transactions t ON p.payment_id = t.payment_id AND t.user_id = :user_id
@@ -147,7 +148,14 @@ $total_pending_amount = $result['total_amount'];
                                 echo "</td>";
                                 echo "<td class='px-6 py-4 text-sm text-gray-500'>" . $payment['description'] . "</td>";
                                 echo "<td class='px-6 py-4 whitespace-nowrap'>";
-                                if ($payment['penalty'] > 0) {
+                                if ($payment['payment_status'] == 'partial') {
+                                    $remaining_amount = $payment['total_amount'] - $payment['paid_amount'];
+                                    echo "<div class='space-y-1'>";
+                                    echo "<div class='text-sm text-gray-600'>ยอดรวม: <span class='font-medium text-gray-900'>" . number_format($payment['total_amount'], 2) . " บาท</span></div>";
+                                    echo "<div class='text-sm text-green-600'>ชำระแล้ว: <span class='font-medium'>" . number_format($payment['paid_amount'], 2) . " บาท</span></div>";
+                                    echo "<div class='text-sm text-orange-600'>คงเหลือ: <span class='font-medium'>" . number_format($remaining_amount, 2) . " บาท</span></div>";
+                                    echo "</div>";
+                                } else if ($payment['penalty'] > 0) {
                                     echo "<div class='space-y-1'>";
                                     echo "<div class='text-sm text-gray-600'>ค่าส่วนกลาง: <span class='font-medium text-gray-900'>" . number_format($payment['amount'], 2) . " บาท</span></div>";
                                     echo "<div class='text-sm text-red-600'>เบี้ยปรับ: <span class='font-medium'>" . number_format($payment['penalty'], 2) . " บาท</span></div>";
@@ -164,7 +172,7 @@ $total_pending_amount = $result['total_amount'];
                                 $status_text = '';
                                 
                                 if (empty($payment['payment_status'])) {
-                                    $status_class = 'bg-gray-100 text-gray-800';
+                                    $status_class = 'bg-gray-200 text-gray-800';
                                     $status_text = 'ยังไม่ชำระ';
                                 } else if ($payment['payment_status'] == 'pending') {
                                     $status_class = 'bg-yellow-100 text-yellow-800';
@@ -175,6 +183,9 @@ $total_pending_amount = $result['total_amount'];
                                 } else if ($payment['payment_status'] == 'rejected') {
                                     $status_class = 'bg-red-100 text-red-800';
                                     $status_text = 'ไม่อนุมัติ';
+                                } else if ($payment['payment_status'] == 'partial') {
+                                    $status_class = 'bg-orange-100 text-orange-800';
+                                    $status_text = 'แบ่งชำระ';
                                 }
                                 
                                 echo "<span class='px-2 inline-flex text-xs leading-5 font-semibold rounded-full {$status_class}'>{$status_text}</span>";
@@ -193,6 +204,8 @@ $total_pending_amount = $result['total_amount'];
                                 echo "<td class='px-6 py-4 whitespace-nowrap text-sm font-medium'>";
                                 if (empty($payment['payment_status']) || $payment['payment_status'] == 'rejected') {
                                     echo "<button onclick='showPaymentForm({$payment['payment_id']})' class='text-blue-600 hover:text-blue-900'>ชำระเงิน</button>";
+                                } else if ($payment['payment_status'] == 'partial') {
+                                    echo "<button onclick='showPaymentForm({$payment['payment_id']}, {$payment['transaction_id']})' class='text-blue-600 hover:text-blue-900'>ชำระเพิ่มเติม</button>";
                                 } else if ($payment['payment_status'] == 'approved') {
                                     echo "<button onclick='showPaymentDetails({$payment['payment_id']}, \"{$payment['slip_image']}\", \"{$payment['payment_date']}\", {$payment['amount']})' class='text-blue-600 hover:text-blue-900'>ดูรายละเอียด</button>";
                                 }
