@@ -26,6 +26,7 @@ if (isset($_GET['payment_id'])) {
         u.fullname,
         u.phone,
         pu.penalty,
+        (p.amount + COALESCE(pu.penalty, 0)) as total_amount,
         GROUP_CONCAT(CONCAT(ut.name, ':', ut.color) SEPARATOR '|') as tags
     FROM payments p
     LEFT JOIN payment_users pu ON p.payment_id = pu.payment_id
@@ -61,7 +62,7 @@ if (isset($_GET['payment_id'])) {
                 'year' => $row['year'],
                 'month_year_display' => sprintf("%02d/%04d", $row['month'], $row['year'])
             ];
-            $total_amount = $row['payment_amount'] * count($results);
+            $total_amount = $row['total_amount'] * count($results);
         }
 
         $user_data = [
@@ -82,7 +83,7 @@ if (isset($_GET['payment_id'])) {
         } else {
             $users[$row['status']][] = $user_data;
             if ($row['status'] === 'approved') {
-                $paid_amount += $row['payment_amount'];
+                $paid_amount += $row['total_amount'];
             }
         }
     }

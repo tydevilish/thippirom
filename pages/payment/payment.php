@@ -9,7 +9,7 @@ checkPageAccess(PAGE_PAYMENT);
 
 // คำนวณยอดค้างชำระทั้งหมด
 $stmt = $conn->prepare("
-    SELECT COALESCE(SUM(p.amount), 0) as total_amount
+    SELECT COALESCE(SUM(p.amount + COALESCE(pu.penalty, 0)), 0) as total_amount
     FROM payments p
     INNER JOIN payment_users pu ON p.payment_id = pu.payment_id
     LEFT JOIN transactions t ON p.payment_id = t.payment_id 
@@ -124,7 +124,9 @@ $total_pending_amount = $result['total_amount'];
                             <?php
                             // ดึงข้อมูลค่าส่วนกลางที่ active
                             $stmt = $conn->prepare("
-                                SELECT p.*, t.status as payment_status, t.transaction_id, t.reject_reason, t.slip_image, t.created_at as payment_date 
+                                SELECT p.*, t.status as payment_status, t.transaction_id, t.reject_reason, t.slip_image, t.created_at as payment_date,
+                                       (p.amount + COALESCE(pu.penalty, 0)) as total_amount,
+                                       pu.penalty
                                 FROM payments p 
                                 INNER JOIN payment_users pu ON p.payment_id = pu.payment_id 
                                 LEFT JOIN transactions t ON p.payment_id = t.payment_id AND t.user_id = :user_id
@@ -144,7 +146,17 @@ $total_pending_amount = $result['total_amount'];
                                 echo str_pad($payment['month'], 2, '0', STR_PAD_LEFT) . '/' . ($payment['year']);
                                 echo "</td>";
                                 echo "<td class='px-6 py-4 text-sm text-gray-500'>" . $payment['description'] . "</td>";
-                                echo "<td class='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>" . number_format($payment['amount'], 2) . "</td>";
+                                echo "<td class='px-6 py-4 whitespace-nowrap'>";
+                                if ($payment['penalty'] > 0) {
+                                    echo "<div class='space-y-1'>";
+                                    echo "<div class='text-sm text-gray-600'>ค่าส่วนกลาง: <span class='font-medium text-gray-900'>" . number_format($payment['amount'], 2) . " บาท</span></div>";
+                                    echo "<div class='text-sm text-red-600'>เบี้ยปรับ: <span class='font-medium'>" . number_format($payment['penalty'], 2) . " บาท</span></div>";
+                                    echo "<div class='text-sm font-medium text-gray-900 pt-1 border-t border-gray-200'>รวมทั้งสิ้น: <span class='font-semibold'>" . number_format($payment['total_amount'], 2) . " บาท</span></div>";
+                                    echo "</div>";
+                                } else {
+                                    echo "<div class='text-sm font-medium text-gray-900'>" . number_format($payment['total_amount'], 2) . " บาท</div>";
+                                }
+                                echo "</td>";
                                 echo "<td class='px-6 py-4 whitespace-nowrap'>";
                                 
                                 // แสดงสถานะการชำระเงิน
@@ -309,7 +321,7 @@ $total_pending_amount = $result['total_amount'];
             }
         });
 
-        // เพิ่ม JavaScript สำหรั Modal
+        // เิิ่ม JavaScript สำหรั Modal
         function showPaymentForm(paymentId, transactionId) {
             document.getElementById('payment_id').value = paymentId;
             if (transactionId) {

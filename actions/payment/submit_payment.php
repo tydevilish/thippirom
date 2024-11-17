@@ -60,11 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_id'])) {
         // บันทึกข้อมูลการชำระเงิน
         $stmt = $conn->prepare("
             INSERT INTO transactions (payment_id, user_id, amount, slip_image, status) 
-            SELECT ?, ?, amount, ?, 'pending' 
-            FROM payments 
-            WHERE payment_id = ?
+            SELECT ?, ?, (p.amount + COALESCE(pu.penalty, 0)), ?, 'pending' 
+            FROM payments p
+            JOIN payment_users pu ON p.payment_id = pu.payment_id
+            WHERE p.payment_id = ? AND pu.user_id = ?
         ");
-        $stmt->execute([$payment_id, $user_id, $file_name, $payment_id]);
+        $stmt->execute([$payment_id, $user_id, $file_name, $payment_id, $user_id]);
 
         $conn->commit();
         header('Location: ../../pages/payment/payment.php?success=1');
