@@ -355,7 +355,7 @@ $pending_users = $result['pending_users'];
                                 <div class="flex items-center mb-2">
                                     <input type="checkbox" id="selectAll"
                                         class="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                                    <label for="selectAll" class="text-sm text-gray-700">เลือทั้งหมด</label>
+                                    <label for="selectAll" class="text-sm text-gray-700">เลือกทั้งหมด</label>
                                 </div>
                                 <div id="userList"
                                     class="max-h-40 overflow-y-auto border-2 border-gray-200 rounded-lg p-2 bg-gray-50">
@@ -668,33 +668,122 @@ $pending_users = $result['pending_users'];
             }
         }
 
-        function updateTransactionStatus(transactionId, status) {
+        // เพิ่มฟังก์ชันสำหรับลดขนาดรูปและแปลงเป็น JPG
+        function resizeAndConvertToJpg(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        // กำหนดขนาดสูงสุดที่ต้องการ
+                        const MAX_WIDTH = 1024;
+                        const MAX_HEIGHT = 1024;
+
+                        let width = img.width;
+                        let height = img.height;
+
+                        // คำนวณขนาดใหม่โดยรักษาอัตราส่วน
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        // วาดรูปลงบน canvas ด้วยขนาดใหม่
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // แปลงเป็น JPG
+                        canvas.toBlob((blob) => {
+                            resolve(new File([blob], 'image.jpg', {
+                                type: 'image/jpeg'
+                            }));
+                        }, 'image/jpeg', 0.8); // quality 0.8 = 80%
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        // แก้ไขฟังก์ชัน updateTransactionStatus เพื่อรองรับการลดขนาดรูป
+        async function updateTransactionStatus(transactionId, status) {
             let reason = '';
             if (status === 'rejected') {
-                reason = prompt('กรุณารบุเหตุผลที่ไม่อนุมัติ:');
+                reason = prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ:');
                 if (!reason) return;
             }
 
+            // ถ้ามีการอัพโหลดรูปใหม่
+            const fileInput = document.querySelector(`input[data-transaction="${transactionId}"]`);
+            let formData = new FormData();
+            
+            if (fileInput && fileInput.files.length > 0) {
+                try {
+                    const resizedFile = await resizeAndConvertToJpg(fileInput.files[0]);
+                    formData.append('slip_image', resizedFile);
+                } catch (error) {
+                    console.error('Error resizing image:', error);
+                    alert('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ');
+                    return;
+                }
+            }
+
+            formData.append('transaction_id', transactionId);
+            formData.append('status', status);
+            formData.append('reason', reason);
+
             fetch('../../actions/payment/update_transaction_status.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `transaction_id=${transactionId}&status=${status}&reason=${encodeURIComponent(reason)}`
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // ีโหลดข้อมูลใน modal
-                        viewPaymentDetails(data.payment_id);
-                    } else {
-                        alert('เกิดข้อผิดพลาด: ' + data.message);
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    viewPaymentDetails(data.payment_id);
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('เกิดข้อผิดพลาดในการอัพเดทสถานะ');
+            });
+        }
+
+        // เพิ่มฟังก์ชันสำหรับ preview รูปภาพ
+        async function previewImage(event, transactionId) {
+            const file = event.target.files[0];
+            if (file) {
+                try {
+                    const resizedFile = await resizeAndConvertToJpg(file);
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const preview = document.querySelector(`#preview-${transactionId}`);
+                        if (preview) {
+                            preview.src = e.target.result;
+                            preview.classList.remove('hidden');
+                        }
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('เกิดข้อผิดพลาดในกรอัพเดทสถานะ');
-                });
+                    reader.readAsDataURL(resizedFile);
+                } catch (error) {
+                    console.error('Error resizing image:', error);
+                    alert('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ');
+                }
+            }
         }
 
         function refreshPaymentDetails(paymentId) {

@@ -336,19 +336,102 @@ $total_pending_amount = $result['total_amount'];
             document.body.style.overflow = ''; // คืนค่า scroll ให้ background
         }
 
-        function previewImage(event) {
-            const file = event.target.files[0];
-            if (file) {
+        // เพิ่มฟังก์ชันสำหรับลดขนาดรูปและแปลงเป็น JPG ในส่วน JavaScript
+        function resizeAndConvertToJpg(file) {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = document.getElementById('image_preview');
-                    const img = preview.querySelector('img');
-                    img.src = e.target.result;
-                    preview.classList.remove('hidden');
-                }
                 reader.readAsDataURL(file);
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        // กำหนดขนาดสูงสุดที่ต้องการ
+                        const MAX_WIDTH = 1024;
+                        const MAX_HEIGHT = 1024;
+
+                        let width = img.width;
+                        let height = img.height;
+
+                        // คำนวณขนาดใหม่โดยรักษาอัตราส่วน
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        // วาดรูปลงบน canvas ด้วยขนาดใหม่
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // แปลงเป็น JPG
+                        canvas.toBlob((blob) => {
+                            resolve(new File([blob], 'image.jpg', {
+                                type: 'image/jpeg'
+                            }));
+                        }, 'image/jpeg', 0.8); // quality 0.8 = 80%
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        // แก้ไขฟังก์ชัน handleDrop
+        async function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            
+            try {
+                const resizedFile = await resizeAndConvertToJpg(file);
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(resizedFile);
+                document.getElementById('slip_image').files = dataTransfer.files;
+                previewImage({target: {files: dataTransfer.files}});
+            } catch (error) {
+                console.error('Error resizing image:', error);
             }
         }
+
+        // แก้ไขฟังก์ชัน previewImage
+        async function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                try {
+                    const resizedFile = await resizeAndConvertToJpg(file);
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const preview = document.getElementById('image_preview');
+                        const img = preview.querySelector('img');
+                        img.src = e.target.result;
+                        preview.classList.remove('hidden');
+                        
+                        // อัพเดทไฟล์ input ด้วยไฟล์ที่ถูกลดขนาดแล้ว
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(resizedFile);
+                        document.getElementById('slip_image').files = dataTransfer.files;
+                    }
+                    reader.readAsDataURL(resizedFile);
+                } catch (error) {
+                    console.error('Error resizing image:', error);
+                }
+            }
+        }
+
+        // แก้ไข event listener สำหรับ file input
+        document.getElementById('slip_image').addEventListener('change', function(e) {
+            previewImage(e);
+        });
 
         // เพิ่ม Drag and Drop support
         const uploadArea = document.querySelector('.upload-area');
@@ -378,13 +461,6 @@ $total_pending_amount = $result['total_amount'];
         }
 
         uploadArea.addEventListener('drop', handleDrop, false);
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            document.getElementById('slip_image').files = files;
-            previewImage({target: {files: files}});
-        }
 
         function showPaymentDetails(paymentId, slipImage, paymentDate, amount) {
             const modal = document.getElementById('paymentDetailsModal');

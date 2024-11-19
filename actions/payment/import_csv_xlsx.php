@@ -113,12 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_FILES['csv_file']) || isse
                         // อัพเดทสถานะการชำระเงิน
                         $stmt = $conn->prepare("
                             INSERT INTO transactions (payment_id, user_id, amount, status, created_at, approved_at, approved_by)
-                            VALUES (?, ?, 300, 'approved', NOW(), NOW(), 1)
+                            VALUES (?, ?, 300, 'approved', NOW(), NOW(), 512)
                             ON DUPLICATE KEY UPDATE 
                             status = 'approved',
                             amount = 300,
                             approved_at = NOW(),
-                            approved_by = 1
+                            approved_by = 512
                         ");
                         $stmt->execute([$payment_id, $user_id]);
 

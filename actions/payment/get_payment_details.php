@@ -376,36 +376,6 @@ if (isset($_GET['payment_id'])) {
                 }
             }
         }
-
-        function updateTransactionStatus(transactionId, status) {
-            let reason = '';
-            if (status === 'rejected') {
-                reason = prompt('กรุณระบุเหตุผลที่ไม่อนุมัติ:');
-                if (!reason) return;
-            }
-
-            fetch('../../actions/payment/update_transaction_status.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `transaction_id=${transactionId}&status=${status}&reason=${encodeURIComponent(reason)}`
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // รีโหลดข้อมูลใน modal
-                        viewPaymentDetails(data.payment_id);
-                    } else {
-                        alert('เกิดข้อผิพลาด: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('เกิดข้อผิดพลาดในการอัพเดทสถานะ');
-                });
-        }
-
         function viewPaymentDetails(paymentId) {
             fetch(`../../actions/payment/get_payment_details.php?payment_id=${paymentId}`)
                 .then(response => response.text())
